@@ -1,0 +1,196 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: >-  
+  AWS CloudFormation Template Wireguard VPN Server:
+  EC2 instance with ubuntu 22.04 and wireguard vpn server
+Parameters:
+  ConfigScript:
+    Type: String
+    Default: 'https://raw.githubusercontent.com/wintermute0xd/aws-cloudform-tests/new-features/wireguard-vpn-server/cloud-init.sh'
+  ConfigFile:
+    Type: String
+    Default: 'https://raw.githubusercontent.com/wintermute0xd/aws-cloudform-tests/new-features/wireguard-vpn-server/wg0.conf'
+  InstanceType:
+    Description: 'Server EC2 instance type'
+    Type: String
+    Default: t2.micro
+  
+  ImageId:
+    Description: 'Image id of Ubuntu22.04 from eu-central-1 region (Frankfurt)'
+    Type: String
+    Default: ami-065deacbcaac64cf2
+
+Resources:
+# Create key pair for ssh login. Priv key in params store
+  VPNServerKeyPair:
+    Type:       AWS::EC2::KeyPair
+    Properties:
+      KeyName: 'MyKeyToVPNServer'
+      KeyType: 'rsa'
+
+# Create Internet Gateway to enable access VPC to the Internet
+  VPNServerInternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+      - Key: 'Name'
+        Value: 'VPNServerIGW'
+
+# Create VPC for VPN server
+  VPNServerVPC:
+    Type:                 AWS::EC2::VPC
+    Properties: 
+      CidrBlock:          '192.168.0.0/16'
+      EnableDnsHostnames: 'true'
+      EnableDnsSupport:   'true'
+      Tags:
+        - Key:             'Name'
+          Value:           'MyVPNServerVPC'
+
+# Create subnet in VPC
+  VPNServerSubnet:
+    Type: AWS::EC2::Subnet
+    Properties: 
+      CidrBlock:            '192.168.0.1/24'
+      MapPublicIpOnLaunch:  'true'
+      Tags: 
+        - Key:    'Name'
+          Value:  'VPNServerSubnet'
+      VpcId:      !Ref VPNServerVPC
+
+# Attach created earlier Internet Gateway
+  VPNServerAttachIGW:
+    Type: AWS::EC2::VPCGatewayAttachment
+    DependsOn: VPNServerInternetGateway
+    Properties:
+      InternetGatewayId: !Ref VPNServerInternetGateway
+      VpcId: !Ref VPNServerVPC
+
+# Create public routes table for VPC
+  VPNServerPublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPNServerVPC
+      Tags:
+        - Key: "Name"
+          Value: "PublicRouteTable"
+
+# Create a route for the table which will forward the traffic
+# from the gateway
+  VPNServerDefaultPublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: VPNServerAttachIGW
+    Properties:
+      RouteTableId: !Ref VPNServerPublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref VPNServerInternetGateway
+
+# Associate route table (which contains default route) to newly created subnet
+  PublicRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    DependsOn: VPNServerPublicRouteTable
+    Properties:
+      RouteTableId: !Ref VPNServerPublicRouteTable
+      SubnetId: !Ref VPNServerSubnet
+
+# Create security group and open 22, 52888 ports
+  VPNServerSecGroup:  
+    Type: AWS::EC2::SecurityGroup
+    Properties: 
+      GroupDescription: 'SG for wireguard vpn server'
+      GroupName: 'VPNServerSG-ssh-wg52888'
+      SecurityGroupIngress:
+          - IpProtocol: tcp
+            FromPort: '22'
+            ToPort: '22'
+            CidrIp: 0.0.0.0/0
+          - IpProtocol: udp
+            FromPort: '52888'
+            ToPort: '52888'
+            CidrIp: '0.0.0.0/0'
+          - IpProtocol: tcp
+            FromPort: '80'
+            ToPort: '80'
+            CidrIp: '0.0.0.0/0'
+      VpcId: !Ref VPNServerVPC
+
+# Create role for ec2 to access ssm parameters store
+  EC2SSMAccessRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - ec2.amazonaws.com
+            Action:
+              - 'sts:AssumeRole'
+      Path: /
+      Policies:
+        - PolicyName: SSMAccess
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action: 'ssm:put*'
+                Resource: '*'
+
+# Create instanse profile to be able to attach it to ec2
+  EC2InstanceProfile:
+    Type: 'AWS::IAM::InstanceProfile'
+    Properties:
+      Path: /
+      Roles:
+        - !Ref EC2SSMAccessRole
+
+# Create parameter in ssm param store
+  BasicParameter:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: '/wg0/pubkey'
+      Type: String
+      Value: 'placeholder'
+# Create EC2 instance and install wireguard on it
+  MyVPNServerEC2:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: !Ref ImageId
+      SubnetId: !Ref VPNServerSubnet
+      InstanceType: !Ref InstanceType
+      KeyName: !Ref VPNServerKeyPair
+      SecurityGroupIds:
+        - !Ref VPNServerSecGroup
+      BlockDeviceMappings:
+        -
+          DeviceName: /dev/sda1
+          Ebs:
+            VolumeSize: 10
+      IamInstanceProfile: !Ref EC2InstanceProfile
+      Tags:
+        - Key: 'Name'
+          Value: 'wg-vpn-server'
+      UserData:
+        Fn::Base64:
+          !Sub |
+            #!/bin/bash
+            mkdir -p /etc/wireguard
+            cd /etc/wireguard
+            wget ${ConfigScript} -O ./cloud-init.sh
+            chmod +x cloud-init.sh
+            wget ${ConfigFile} -O ./wg0.conf
+            echo ${AWS::Region} > /home/ubuntu/test.txt
+            export AWSREG=${AWS::Region}
+            ./cloud-init.sh
+
+Outputs:
+  Endpoint:
+    Value: !Join
+      - ''
+      - - !GetAtt 
+          - MyVPNServerEC2
+          - PublicIp
+        - ':52888'
+
+  Web:
+    Value: !Join ['', ['http://', !GetAtt MyVPNServerEC2.PublicDnsName]]
