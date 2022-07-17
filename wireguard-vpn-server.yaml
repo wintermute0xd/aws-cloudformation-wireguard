@@ -3,12 +3,6 @@ Description: >-
   AWS CloudFormation Template Wireguard VPN Server:
   EC2 instance with ubuntu 22.04 and wireguard vpn server
 Parameters:
-  ConfigScript:
-    Type: String
-    Default: 'https://raw.githubusercontent.com/wintermute0xd/aws-cloudform-tests/new-features/wireguard-vpn-server/cloud-init.sh'
-  ConfigFile:
-    Type: String
-    Default: 'https://raw.githubusercontent.com/wintermute0xd/aws-cloudform-tests/new-features/wireguard-vpn-server/wg0.conf'
   InstanceType:
     Description: 'Server EC2 instance type'
     Type: String
@@ -144,13 +138,7 @@ Resources:
       Roles:
         - !Ref EC2SSMAccessRole
 
-# Create parameter in ssm param store
-  BasicParameter:
-    Type: AWS::SSM::Parameter
-    Properties:
-      Name: '/wg0/pubkey'
-      Type: String
-      Value: 'placeholder'
+
 # Create EC2 instance and install wireguard on it
   MyVPNServerEC2:
     Type: AWS::EC2::Instance
@@ -174,14 +162,51 @@ Resources:
         Fn::Base64:
           !Sub |
             #!/bin/bash
+            apt-get -y update
+            apt-get -y install wireguard
+            apt-get -y install apache2
+            apt-get -y install awscli
             mkdir -p /etc/wireguard
             cd /etc/wireguard
-            wget ${ConfigScript} -O ./cloud-init.sh
-            chmod +x cloud-init.sh
-            wget ${ConfigFile} -O ./wg0.conf
-            echo ${AWS::Region} > /home/ubuntu/test.txt
-            export AWSREG=${AWS::Region}
-            ./cloud-init.sh
+            # Generate priv and pub keys
+            wg genkey > priv
+            sudo chmod 700 priv
+            cat priv | wg pubkey > pub
+            # Create condig file
+            {
+                echo '[Interface]'
+                echo 'PrivateKey = '`cat priv`
+                echo 'Address = 10.10.10.10/24'
+                echo 'ListenPort = 52888'
+                echo 'SaveConfig = true'
+                echo 'PostUp = ufw route allow in on wg0 out on eth0'  
+                echo 'PostUp = iptables -t nat -I POSTROUTING -o eth0 -j MASQUERADE'
+                echo 'PreDown = ufw route delete allow in on wg0 out on eth0'
+                echo 'PreDown = iptables -t nat -D POSTROUTING -o eth0 -j MASQUERADE'
+                echo ''
+            } >> wg0.conf
+            # Config firewall
+            ufw allow 52888/udp
+            ufw allow 22/tcp
+            ufw allow 53/udp
+            ufw allow 80/tcp
+            ufw disable
+            echo 'y' | sudo ufw enable
+            # Allow packet forwarding
+            sed -i 's/#net.ipv4.ip_forward=1/net.ipv4.ip_forward=1/' /etc/sysctl.conf
+            sysctl -p
+            # Enable wg service
+            systemctl enable wg-quick@wg0.service
+            systemctl start wg-quick@wg0.service
+            # Create webpage with public key and start apache
+            {
+              echo '<html><body><h2>Server Public Key: '
+              echo `cat pub`
+              echo '</h2></body></html>'
+            } > /var/www/html/index.html
+            systemctl start apache2.service
+            systemctl enable apache2.service
+            aws ssm put-parameter --name '/wg0/pubkey' --type String --value `cat pub` --region ${AWS::Region}
 
 Outputs:
   Endpoint:
