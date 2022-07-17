@@ -10,15 +10,105 @@ Parameters:
     Type: String
     Default: 'https://raw.githubusercontent.com/wintermute0xd/aws-cloudformation-wireguard/main/wg0.conf'
   InstanceType:
-    Description: 'Server EC2 instance type'
+    Description: 'Server EC2 instance type. Only t2.micro is free tier'
     Type: String
     Default: t2.micro
+    AllowedValues:
+      - t1.micro
+      - t2.nano
+      - t2.micro
+      - t2.small
+      - t2.medium
+      - t2.large
+      - m1.small
+      - m1.medium
+      - m1.large
+      - m1.xlarge
+      - m2.xlarge
+      - m2.2xlarge
+      - m2.4xlarge
+      - m3.medium
+      - m3.large
+      - m3.xlarge
+      - m3.2xlarge
+      - m4.large
+      - m4.xlarge
+      - m4.2xlarge
+      - m4.4xlarge
+      - m4.10xlarge
+      - c1.medium
+      - c1.xlarge
+      - c3.large
+      - c3.xlarge
+      - c3.2xlarge
+      - c3.4xlarge
+      - c3.8xlarge
+      - c4.large
+      - c4.xlarge
+      - c4.2xlarge
+      - c4.4xlarge
+      - c4.8xlarge
+      - g2.2xlarge
+      - g2.8xlarge
+      - r3.large
+      - r3.xlarge
+      - r3.2xlarge
+      - r3.4xlarge
+      - r3.8xlarge
+      - i2.xlarge
+      - i2.2xlarge
+      - i2.4xlarge
+      - i2.8xlarge
+      - d2.xlarge
+      - d2.2xlarge
+      - d2.4xlarge
+      - d2.8xlarge
+      - hi1.4xlarge
+      - hs1.8xlarge
+      - cr1.8xlarge
+      - cc2.8xlarge
+      - cg1.4xlarge
+    ConstraintDescription: must be a valid EC2 instance type.
   
-  ImageId:
-    Description: 'Image id of Ubuntu22.04 from eu-central-1 region (Frankfurt)'
-    Type: String
-    Default: ami-065deacbcaac64cf2
-
+  # ImageId:
+  #   Description: 'Image id of Ubuntu22.04 from eu-central-1 region (Frankfurt)'
+  #   Type: String
+  #   Default: ami-065deacbcaac64cf2
+  #   AllowedValues: ['ami-065deacbcaac64cf2', 'ami-052efd3df9dad4825']
+Mappings:
+  AWSRegionArch2AMI:
+    af-south-1:
+      ami: a
+    ap-east-1: 
+      ami: a
+    ap-northeast-1:
+      ami: a
+    # ap-northeast-2: a
+    # ap-northeast-3: a
+    # ap-south-1: a
+    # ap-southeast-1: a
+    # ap-southeast-2: a
+    # ca-central-1: a
+    # cn-north-1: a
+    # cn-northwest-1: a
+    eu-central-1: 
+      AmiID: ami-065deacbcaac64cf2
+    # eu-north-1: a
+    # eu-south-1: a
+    eu-west-1:
+      AmiID: ami-0d75513e7706cf2d9
+    # eu-west-2: a
+    # eu-west-3: a
+    # me-south-1: a
+    # sa-east-1: a
+    us-east-1: 
+      AmiID: ami-052efd3df9dad4825
+    us-east-2:
+      AmiID: ami-02f3416038bdb17fb
+    us-west-1:
+      AmiID: ami-085284d24fe829cd0
+    us-west-2:
+      AmiID: ami-0d70546e43a941d70
 Resources:
 # Create key pair for ssh login. Priv key in params store
   VPNServerKeyPair:
@@ -155,7 +245,11 @@ Resources:
   MyVPNServerEC2:
     Type: AWS::EC2::Instance
     Properties:
-      ImageId: !Ref ImageId
+      #ImageId: !Ref ImageId
+      ImageId: !FindInMap
+        - AWSRegionArch2AMI
+        - !Ref 'AWS::Region'
+        - AmiID
       SubnetId: !Ref VPNServerSubnet
       InstanceType: !Ref InstanceType
       KeyName: !Ref VPNServerKeyPair
