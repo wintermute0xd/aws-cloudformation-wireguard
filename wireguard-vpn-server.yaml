@@ -5,10 +5,10 @@ Description: >-
 Parameters:
   ConfigScript:
     Type: String
-    Default: 'https://raw.githubusercontent.com/wintermute0xd/aws-cloudform-tests/new-features/wireguard-vpn-server/cloud-init.sh'
+    Default: 'https://raw.githubusercontent.com/wintermute0xd/aws-cloudformation-wireguard/main/cloud-init.sh'
   ConfigFile:
     Type: String
-    Default: 'https://raw.githubusercontent.com/wintermute0xd/aws-cloudform-tests/new-features/wireguard-vpn-server/wg0.conf'
+    Default: 'https://raw.githubusercontent.com/wintermute0xd/aws-cloudformation-wireguard/main/wg0.conf'
   InstanceType:
     Description: 'Server EC2 instance type'
     Type: String
