@@ -2,6 +2,12 @@ AWSTemplateFormatVersion: 2010-09-09
 Description: >-  
   AWS CloudFormation Template Wireguard VPN Server:
   EC2 instance with ubuntu 22.04 and wireguard vpn server
+  
+  Following regions are not supported:
+    EU Milan (eu-south-1)
+    Middle East Bahrain (me-south-1)
+    Africa Cape Town (af-south-1)
+    Asia Pacific Hong Kong (ap-east-1)
 Parameters:
   ConfigScript:
     Type: String
@@ -77,30 +83,32 @@ Parameters:
   #   AllowedValues: ['ami-065deacbcaac64cf2', 'ami-052efd3df9dad4825']
 Mappings:
   AWSRegionArch2AMI:
-    af-south-1:
-      ami: a
-    ap-east-1: 
-      ami: a
     ap-northeast-1:
-      ami: a
-    # ap-northeast-2: a
-    # ap-northeast-3: a
-    # ap-south-1: a
-    # ap-southeast-1: a
-    # ap-southeast-2: a
-    # ca-central-1: a
-    # cn-north-1: a
-    # cn-northwest-1: a
+      AmiID: ami-02ee763250491e04a
+    ap-northeast-2:
+      AmiID: ami-058165de3b7202099
+    ap-northeast-3:
+      AmiID: ami-096d800410995ae84
+    ap-south-1:
+      AmiID: ami-068257025f72f470d
+    ap-southeast-1:
+      AmiID: ami-02ee763250491e04a
+    ap-southeast-2:
+      AmiID: ami-0e040c48614ad1327
+    ca-central-1:
+      AmiID: ami-0b6937ac543fe96d7
     eu-central-1: 
       AmiID: ami-065deacbcaac64cf2
-    # eu-north-1: a
-    # eu-south-1: a
+    eu-north-1:
+      AmiID: ami-0440e5026412ff23f
     eu-west-1:
       AmiID: ami-0d75513e7706cf2d9
-    # eu-west-2: a
-    # eu-west-3: a
-    # me-south-1: a
-    # sa-east-1: a
+    eu-west-2:
+      AmiID: ami-0fb391cce7a602d1f
+    eu-west-3:
+      AmiID: ami-09e513e9eacab10c1
+    sa-east-1:
+      AmiID: ami-08ae71fd7f1449df1
     us-east-1: 
       AmiID: ami-052efd3df9dad4825
     us-east-2:
